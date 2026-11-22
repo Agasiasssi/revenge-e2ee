@@ -4,6 +4,19 @@ End-to-end encryption for Discord DMs, for [Revenge](https://github.com/revenge-
 
 Signal-style **Double Ratchet** (X25519 + HKDF-SHA256 + AES-256-GCM), protocol **v2**, **wire-compatible** with the Vencord desktop build: a phone on Revenge and a desktop on Vencord can hold an encrypted conversation.
 
+## Desktop (Vencord / Vesktop) — the original
+
+`vencord/` holds the **desktop plugin source** (copied from [tobi437a/vencord-E2EE](https://github.com/tobi437a/vencord-E2EE), the original by Tobi) and `vencord/dist/` holds a **ready-built Vencord dist** with the E2EE plugin bundled — the exact build running on Vesktop here. Protocol v2 is identical on both platforms, so desktop and Android can talk securely to each other.
+
+**Ready-built install (Vesktop):**
+1. Copy `vencord/dist/` somewhere persistent, e.g. `~/.config/vesktop/vencord-dist`
+2. Vesktop → Settings → Vencord Location → Change → select that folder (Flatpak: `state.json` → `"vencordDir"` must be the sandbox-visible path)
+3. Enable **E2EE** in Vencord's plugin settings, restart
+
+**From source:** drop `vencord/` into `Vencord/src/userplugins/E2EE/`, then `pnpm i && pnpm build` per the [Vencord custom plugins docs](https://docs.vencord.dev/installing/custom-plugins/).
+
+> The desktop dist is a build artifact (includes sourcemaps); rebuild it from source whenever the plugin or Vencord updates.
+
 ## Install (Revenge Xposed 1.9.x)
 
 1. Discord → **Settings → Plugins** → **Plugin Browser** → tap the **+** in the top-right → **Add Repository...** and enter:
