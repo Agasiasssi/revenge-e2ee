@@ -1024,21 +1024,29 @@ function insertLockButton(tree: any): any {
 }
 
 let chatInputUnpatch: (() => void) | null = null;
+let chatInputRetry: ReturnType<typeof setInterval> | null = null;
 
 function setupLockButton() {
-    try {
-        // spitroast signature: (funcName, funcParent, cb). Passing a lazy
-        // module activates bunny's delayed patching: the patch applies when
-        // the module loads (ChatInputActions mounts with the first chat).
-        // On this Discord, memo.type is a forwardRef object — patch its
-        // render, which spitroast's after cb receives the rendered tree of.
-        const lazyMemo = (globalThis as any).bunny.metro.findByFilePathLazy(
-            "modules/chat_input/native/action_buttons/ChatInputActions.tsx", true);
-        chatInputUnpatch = patcher.after("render", lazyMemo, (_args: any[], ret: any) => insertLockButton(ret)) as unknown as () => void;
-        log.info("Lock button patch armed (delayed until chat input loads)");
-    } catch (e) {
-        log.error("Lock button patch failed", e);
-    }
+    // Poll until the module is loaded AND the patch target is confirmed to be
+    // a real function. NEVER let spitroast touch a missing/non-function key:
+    // a throw inside the module require chain crashes Discord's renderer.
+    chatInputRetry = setInterval(() => {
+        let memo: any;
+        try {
+            memo = (globalThis as any).bunny.metro.findByFilePath(
+                "modules/chat_input/native/action_buttons/ChatInputActions.tsx", true);
+        } catch { return; }
+        const render = memo?.type?.render;
+        if (typeof render !== "function") return;
+        if (chatInputRetry) { clearInterval(chatInputRetry); chatInputRetry = null; }
+
+        try {
+            chatInputUnpatch = patcher.after("render", memo.type, (_args: any[], ret: any) => insertLockButton(ret)) as unknown as () => void;
+            log.info("Lock button installed");
+        } catch (e) {
+            log.error("Lock button patch failed", e);
+        }
+    }, 1000);
 }
 
 function LockButton() {
@@ -1356,6 +1364,7 @@ function stop() {
     try { editUnpatch?.(); } catch { }
     try { fluxUnsub?.(); } catch { }
     try { chatInputUnpatch?.(); } catch { }
+    if (chatInputRetry) { clearInterval(chatInputRetry); chatInputRetry = null; }
     chatInputUnpatch = null;
     sendUnpatch = null;
     editUnpatch = null;

@@ -4970,14 +4970,29 @@
     return tree;
   }
   var chatInputUnpatch = null;
+  var chatInputRetry = null;
   function setupLockButton() {
-    try {
-      const lazyMemo = globalThis.bunny.metro.findByFilePathLazy("modules/chat_input/native/action_buttons/ChatInputActions.tsx", true);
-      chatInputUnpatch = patcher.after("render", lazyMemo, (_args, ret) => insertLockButton(ret));
-      log.info("Lock button patch armed (delayed until chat input loads)");
-    } catch (e) {
-      log.error("Lock button patch failed", e);
-    }
+    chatInputRetry = setInterval(() => {
+      let memo;
+      try {
+        memo = globalThis.bunny.metro.findByFilePath("modules/chat_input/native/action_buttons/ChatInputActions.tsx", true);
+      } catch {
+        return;
+      }
+      const render = memo?.type?.render;
+      if (typeof render !== "function")
+        return;
+      if (chatInputRetry) {
+        clearInterval(chatInputRetry);
+        chatInputRetry = null;
+      }
+      try {
+        chatInputUnpatch = patcher.after("render", memo.type, (_args, ret) => insertLockButton(ret));
+        log.info("Lock button installed");
+      } catch (e) {
+        log.error("Lock button patch failed", e);
+      }
+    }, 1000);
   }
   function LockButton() {
     const [, setTick] = React.useState(0);
@@ -5118,6 +5133,10 @@
     try {
       chatInputUnpatch?.();
     } catch {}
+    if (chatInputRetry) {
+      clearInterval(chatInputRetry);
+      chatInputRetry = null;
+    }
     chatInputUnpatch = null;
     sendUnpatch = null;
     editUnpatch = null;

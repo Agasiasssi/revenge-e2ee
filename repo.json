@@ -4,6 +4,6 @@
 		"description": "End-to-end encryption for Discord DMs (Revenge port of tobi437a/vencord-E2EE)"
 	},
 	"com.tobi437a.e2ee": {
-		"version": "1.0.2"
+		"version": "1.0.3"
 	}
 }
