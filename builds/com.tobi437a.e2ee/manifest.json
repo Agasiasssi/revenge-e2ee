@@ -1,7 +1,7 @@
 {
 	"id": "com.tobi437a.e2ee",
 	"spec": 3,
-	"version": "1.0.3",
+	"version": "1.0.4",
 	"type": "plugin",
 	"display": {
 		"name": "E2EE",

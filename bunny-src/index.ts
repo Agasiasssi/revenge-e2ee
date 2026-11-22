@@ -33,8 +33,8 @@ import {
 } from "./session";
 import { DataStore, doc as storageDoc } from "./store";
 import {
-    ChannelStore, findChatInputActions, fluxDispatcher, h, MessageActions, MessageStore,
-    patcher, React, RN, SelectedChannelStore, UserStore,
+    ChannelStore, fluxDispatcher, h, MessageActions, MessageStore,
+    patcher, React, RN, SelectedChannelStore, UserStore, waitStorageReady,
 } from "./ctx";
 import { askChoice, askPassphrase } from "./ui";
 import { b64encode as b64encodeLocal, safetyNumber as safetyNumberLocal } from "./crypto";
@@ -1092,7 +1092,11 @@ function LockButton() {
         label = "E2EE enabled — send a message to start handshake";
     }
 
-    return h(RN.Text, { style: { fontSize: 20, padding: 4 } }, icon);
+    return h(RN.Pressable, {
+        onPress: () => { onLockTapped(channelId).catch(e => log.error("Lock tap failed", e)); },
+        hitSlop: 8,
+        style: { padding: 4 },
+    }, h(RN.Text, { style: { fontSize: 20, lineHeight: 24 } }, icon));
 }
 
 // ------------------------------ Lock actions ------------------------------
@@ -1196,7 +1200,10 @@ async function toggleLock(channelId: string) {
         return;
     }
 
-    if (!identity) return;
+    if (!identity) {
+        toast("🔐 E2EE isn't ready yet — try again in a moment.", "critical");
+        return;
+    }
     if (pending?.phase === "init-recvd" && hasChangedKey(channelId, pending)) return;
 
     enabledChannels.add(channelId);
@@ -1297,7 +1304,7 @@ let fluxUnsub: (() => void) | null = null;
 let sendUnpatch: (() => void) | null = null;
 let editUnpatch: (() => void) | null = null;
 
-function start() {
+async function start() {
     (globalThis as any).__e2eeStarted = true;
     if (!hasNativeRng()) {
         log.warn(
@@ -1307,7 +1314,12 @@ function start() {
         );
     }
 
-    loadAll()
+    // The storage proxy throws until its backing file is read — wait for it,
+    // otherwise loadAll aborts and identity/sessions never load.
+    waitStorageReady().then(ready => {
+        if (!ready) log.error("E2EE: storage did not initialize in time");
+        return loadAll();
+    })
         .then(() => log.info("E2EE state loaded"))
         .catch(e => log.error("E2EE: initial load failed", e));
 

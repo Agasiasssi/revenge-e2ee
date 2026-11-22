@@ -28,6 +28,24 @@ export const pluginStorage: any = (bunny.plugin?.createStorage
     ? bunny.plugin.createStorage()
     : bunny.api.storage.createStorage("plugins/storage/com.tobi437a.e2ee.json"));
 
+/**
+ * The storage proxy THROWS on any property access until its backing file has
+ * been read (async). bunny awaits it internally before handing it to plugins
+ * through some paths, but not all — so poll until access succeeds.
+ */
+export async function waitStorageReady(timeoutMs = 15000): Promise<boolean> {
+    const t0 = Date.now();
+    while (Date.now() - t0 < timeoutMs) {
+        try {
+            void pluginStorage.kv;
+            return true;
+        } catch {
+            await new Promise(r => setTimeout(r, 100));
+        }
+    }
+    return false;
+}
+
 // ------------------------------ Discord module handles ------------------------------
 
 export const MessageActions: any = metro.findByPropsLazy("sendMessage", "editMessage");

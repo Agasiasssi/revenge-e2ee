@@ -3924,6 +3924,18 @@
   var findInReactTree = bunny.utils.findInReactTree;
   var h = React.createElement;
   var pluginStorage = bunny.plugin?.createStorage ? bunny.plugin.createStorage() : bunny.api.storage.createStorage("plugins/storage/com.tobi437a.e2ee.json");
+  async function waitStorageReady(timeoutMs = 15000) {
+    const t0 = Date.now();
+    while (Date.now() - t0 < timeoutMs) {
+      try {
+        pluginStorage.kv;
+        return true;
+      } catch {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    }
+    return false;
+  }
   var MessageActions = metro.findByPropsLazy("sendMessage", "editMessage");
   var UserStore = metro.findByStoreNameLazy("UserStore");
   var ChannelStore = metro.findByStoreNameLazy("ChannelStore");
@@ -3947,9 +3959,42 @@
   };
 
   // bunny-src/ui.tsx
+  function mapVariant(variant) {
+    switch (variant) {
+      case "primary":
+        return "primary";
+      case "critical-primary":
+        return "destructive";
+      default:
+        return "secondary";
+    }
+  }
   var alertSeq = 0;
   function nextKey(kind) {
     return `com.tobi437a.e2ee.${kind}.${Date.now()}.${alertSeq++}`;
+  }
+  function askChoice({ title, subtitle, warning, body, choices }) {
+    return new Promise((resolve) => {
+      let settled = false;
+      const key = nextKey("choice");
+      alerts.openAlert(key, h(C.AlertModal, {
+        title,
+        content: subtitle,
+        extraContent: h(React.Fragment, null, warning ? h(RN.Text, { style: { color: "#f23f43", fontWeight: "600", marginBottom: 8 } }, warning) : null, body ?? null),
+        actions: h(React.Fragment, null, choices.map(({ id, text, variant }) => h(C.AlertActionButton, {
+          key: id,
+          variant: mapVariant(variant),
+          text,
+          onPress: () => {
+            settled = true;
+            resolve(id);
+          }
+        })))
+      }), () => {
+        if (!settled)
+          resolve(null);
+      });
+    });
   }
   var MIN_PASSPHRASE_LENGTH = 12;
   function askPassphrase(mode, verify) {
@@ -4413,6 +4458,12 @@
     }
     await writeSecret(STORE_SESSIONS, Object.fromEntries(await Promise.all(pending)));
   });
+  async function persistEnabled() {
+    const out = {};
+    for (const id of enabledChannels)
+      out[id] = true;
+    await DataStore.set(STORE_ENABLED, out);
+  }
   async function unlockNow() {
     const meta = await DataStore.get(STORE_VAULT);
     if (!isVaultMeta(meta)) {
@@ -4514,6 +4565,16 @@
     rememberOwnPlaintext(wire, text);
     await persistState();
     sendRaw(channelId, wire);
+  }
+  async function turnOff(channelId) {
+    const previous = sessions.get(channelId);
+    enabledChannels.delete(channelId);
+    sessions.delete(channelId);
+    await persistEnabled();
+    await persistState();
+    notifyStateChange();
+    if (previous && previous.phase !== "none" && previous.phase !== "peer-reset")
+      sendRaw(channelId, PREFIX_RESET);
   }
   async function acceptInvite(channelId, s) {
     if (!identity)
@@ -5035,7 +5096,138 @@
       icon = "\uD83D\uDFE1";
       label = "E2EE enabled — send a message to start handshake";
     }
-    return h(RN.Text, { style: { fontSize: 20, padding: 4 } }, icon);
+    return h(RN.Pressable, {
+      onPress: () => {
+        onLockTapped(channelId).catch((e) => log.error("Lock tap failed", e));
+      },
+      hitSlop: 8,
+      style: { padding: 4 }
+    }, h(RN.Text, { style: { fontSize: 20, lineHeight: 24 } }, icon));
+  }
+  function lockAction(channelId, action) {
+    runExclusive(channelId, action).catch((e) => {
+      log.error("Lock action failed", e);
+      toast("\uD83D\uDD10 That didn't work — see the console for details.", "critical");
+    });
+  }
+  async function onLockTapped(channelId) {
+    if (vaultLocked) {
+      await unlockNow();
+      return;
+    }
+    const s = sessions.get(channelId);
+    const enabled = enabledChannels.has(channelId);
+    if (enabled && s?.phase === "peer-reset") {
+      const choice = await askChoice({
+        title: "Your friend ended the encrypted chat",
+        subtitle: "Nothing can be sent in this DM until you choose what happens next.",
+        warning: "This notice can be faked by someone tampering with the chat. If you weren't expecting it, " + "check with your friend some other way before carrying on without encryption.",
+        choices: [
+          { id: "plain", text: "Continue without encryption", variant: "secondary" },
+          { id: "encrypt", text: "Turn encryption back on", variant: "primary" }
+        ]
+      });
+      if (choice === "encrypt")
+        lockAction(channelId, async () => {
+          if (sessions.get(channelId)?.phase !== "peer-reset")
+            return;
+          await startHandshake(channelId);
+          toast("\uD83D\uDD10 Invitation sent — the button shows \uD83D\uDD12 once your friend accepts.");
+        });
+      if (choice === "plain")
+        lockAction(channelId, async () => {
+          await turnOff(channelId);
+          toast("\uD83D\uDD10 E2EE disabled for this DM. Messages here are no longer encrypted.");
+        });
+      return;
+    }
+    if (s && (s.untrustedKey || s.phase === "init-recvd" && hasChangedKey(channelId, s))) {
+      const choice = await askChoice({
+        title: "Your friend's identity key has changed",
+        subtitle: "This happens when they reinstall the plugin or clear its data. " + "It is also exactly what someone impersonating them would look like.",
+        warning: "Compare the safety number below with your friend over a voice call or in person. " + "Only continue if you both see the same digits.",
+        body: h(RN.Text, { style: { fontFamily: "monospace", fontSize: 18, letterSpacing: 2 } }, s.safetyNum),
+        choices: [
+          { id: "off", text: s.phase === "ready" ? "Turn encryption off" : "Decline", variant: "secondary" },
+          { id: "trust", text: "They match — trust this key", variant: "critical-primary" }
+        ]
+      });
+      if (choice === "trust")
+        lockAction(channelId, () => trustChangedKey(channelId));
+      if (choice === "off")
+        lockAction(channelId, async () => {
+          await turnOff(channelId);
+          toast("\uD83D\uDD10 The new key was not trusted. E2EE is off for this DM.");
+        });
+      return;
+    }
+    if (enabled && s?.phase === "ready") {
+      const choice = await askChoice({
+        title: "Turn off encryption?",
+        subtitle: "New messages in this DM will be readable by Discord again. Your friend is told, and their side " + "stays closed until they confirm. Messages you have already saved stay readable.",
+        choices: [
+          { id: "keep", text: "Keep encrypted", variant: "secondary" },
+          { id: "off", text: "Turn off", variant: "critical-primary" }
+        ]
+      });
+      if (choice === "off")
+        lockAction(channelId, async () => {
+          await turnOff(channelId);
+          toast("\uD83D\uDD10 E2EE disabled for this DM.");
+        });
+      return;
+    }
+    lockAction(channelId, () => toggleLock(channelId));
+  }
+  async function toggleLock(channelId) {
+    const pending = sessions.get(channelId);
+    if (enabledChannels.has(channelId)) {
+      if (pending?.phase === "ready" || pending?.phase === "peer-reset")
+        return;
+      await turnOff(channelId);
+      toast(pending?.phase === "init-recvd" ? "\uD83D\uDD10 Handshake invitation declined." : "\uD83D\uDD10 E2EE disabled for this DM.");
+      return;
+    }
+    if (!identity) {
+      toast("\uD83D\uDD10 E2EE isn't ready yet — try again in a moment.", "critical");
+      return;
+    }
+    if (pending?.phase === "init-recvd" && hasChangedKey(channelId, pending))
+      return;
+    enabledChannels.add(channelId);
+    await persistEnabled();
+    notifyStateChange();
+    if (pending?.phase === "init-recvd") {
+      const sess = await acceptInvite(channelId, pending);
+      if (sess) {
+        const safety = showSafetyNumberOnReady() ? ` Safety #: ${sess.safetyNum}.` : "";
+        toast(`\uD83D\uDD10 E2EE handshake accepted.${safety}`, "success");
+      }
+    } else if (!pending || pending.phase === "none") {
+      await startHandshake(channelId);
+      toast("\uD83D\uDD10 Invitation sent — the button shows \uD83D\uDD12 once your friend accepts.");
+    }
+  }
+  async function trustChangedKey(channelId) {
+    const s = sessions.get(channelId);
+    const peerId = getPeerUserId(channelId);
+    if (!s?.peerIdPub || !peerId)
+      return;
+    if (s.phase === "init-recvd") {
+      enabledChannels.add(channelId);
+      await persistEnabled();
+      notifyStateChange();
+      if (await acceptInvite(channelId, s))
+        toast("\uD83D\uDD10 Invitation accepted with the new key.", "success");
+      return;
+    }
+    if (s.phase === "ready" && s.untrustedKey) {
+      s.untrustedKey = false;
+      await pinPeerKey(peerId, s.peerIdPub);
+      await sendPrime(channelId, s);
+      notifyStateChange();
+      toast("\uD83D\uDD10 New key trusted. Secure channel established.", "success");
+    }
   }
   function SettingsComponent() {
     const [, setTick] = React.useState(0);
@@ -5083,12 +5275,16 @@
   var fluxUnsub = null;
   var sendUnpatch = null;
   var editUnpatch = null;
-  function start() {
+  async function start() {
     globalThis.__e2eeStarted = true;
     if (!hasNativeRng()) {
       log.warn("No CSPRNG available in this runtime (crypto.getRandomValues missing). " + "Key generation falls back to a SHA-256 entropy pool — E2EE security is REDUCED. " + "Consider generating your identity on a desktop build and transferring it.");
     }
-    loadAll().then(() => log.info("E2EE state loaded")).catch((e) => log.error("E2EE: initial load failed", e));
+    waitStorageReady().then((ready) => {
+      if (!ready)
+        log.error("E2EE: storage did not initialize in time");
+      return loadAll();
+    }).then(() => log.info("E2EE state loaded")).catch((e) => log.error("E2EE: initial load failed", e));
     try {
       sendUnpatch = patcher.instead("sendMessage", MessageActions, (args, orig) => {
         const [channelId, data] = args;
