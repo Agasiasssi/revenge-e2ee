@@ -3928,18 +3928,6 @@
   var ChannelStore = metro.findByStoreNameLazy("ChannelStore");
   var MessageStore = metro.findByStoreNameLazy("MessageStore");
   var SelectedChannelStore = metro.findByStoreNameLazy("SelectedChannelStore");
-  var ChatInputActionsPath = "modules/chat_input/native/action_buttons/ChatInputActions.tsx";
-  var chatInputActions = undefined;
-  function findChatInputActions() {
-    if (chatInputActions)
-      return chatInputActions;
-    try {
-      const found = metro.findByFilePath(ChatInputActionsPath, true);
-      if (found)
-        chatInputActions = found;
-    } catch {}
-    return chatInputActions;
-  }
 
   // bunny-src/store.ts
   var doc = pluginStorage;
@@ -4982,23 +4970,14 @@
     return tree;
   }
   var chatInputUnpatch = null;
-  var chatInputRetry = null;
   function setupLockButton() {
-    chatInputRetry = setInterval(() => {
-      const actions = findChatInputActions();
-      if (!actions)
-        return;
-      if (chatInputRetry) {
-        clearInterval(chatInputRetry);
-        chatInputRetry = null;
-      }
-      try {
-        chatInputUnpatch = patcher.after("e2ee-lock", actions, "type", (_args, ret) => insertLockButton(ret));
-        log.info("Lock button installed");
-      } catch (e) {
-        log.error("Lock button patch failed", e);
-      }
-    }, 1000);
+    try {
+      const lazyMemo = globalThis.bunny.metro.findByFilePathLazy("modules/chat_input/native/action_buttons/ChatInputActions.tsx", true);
+      chatInputUnpatch = patcher.after("render", lazyMemo, (_args, ret) => insertLockButton(ret));
+      log.info("Lock button patch armed (delayed until chat input loads)");
+    } catch (e) {
+      log.error("Lock button patch failed", e);
+    }
   }
   function LockButton() {
     const [, setTick] = React.useState(0);
@@ -5094,7 +5073,7 @@
     }
     loadAll().then(() => log.info("E2EE state loaded")).catch((e) => log.error("E2EE: initial load failed", e));
     try {
-      sendUnpatch = patcher.instead("e2ee-send", MessageActions, "sendMessage", (args, orig) => {
+      sendUnpatch = patcher.instead("sendMessage", MessageActions, (args, orig) => {
         const [channelId, data] = args;
         if (!data || typeof data.content !== "string" || isE2EEMessage(data.content) || !enabledChannels.has(channelId)) {
           return orig(...args);
@@ -5105,7 +5084,7 @@
           return orig(...args);
         });
       });
-      editUnpatch = patcher.instead("e2ee-edit", MessageActions, "editMessage", (args, orig) => {
+      editUnpatch = patcher.instead("editMessage", MessageActions, (args, orig) => {
         const [channelId] = args;
         const block = onEdit(channelId, args);
         if (block === false)
@@ -5138,10 +5117,6 @@
     try {
       chatInputUnpatch?.();
     } catch {}
-    if (chatInputRetry) {
-      clearInterval(chatInputRetry);
-      chatInputRetry = null;
-    }
     chatInputUnpatch = null;
     sendUnpatch = null;
     editUnpatch = null;

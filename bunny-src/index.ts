@@ -1024,23 +1024,21 @@ function insertLockButton(tree: any): any {
 }
 
 let chatInputUnpatch: (() => void) | null = null;
-let chatInputRetry: ReturnType<typeof setInterval> | null = null;
 
 function setupLockButton() {
-    chatInputRetry = setInterval(() => {
-        const actions = findChatInputActions();
-        if (!actions) return;
-        if (chatInputRetry) { clearInterval(chatInputRetry); chatInputRetry = null; }
-
-        try {
-            // The memo component's render fn lives on `.type` (silent-typing
-            // pattern); spitroast's after cb returns the replacement tree.
-            chatInputUnpatch = patcher.after("e2ee-lock", actions, "type", (_args: any[], ret: any) => insertLockButton(ret)) as unknown as () => void;
-            log.info("Lock button installed");
-        } catch (e) {
-            log.error("Lock button patch failed", e);
-        }
-    }, 1000);
+    try {
+        // spitroast signature: (funcName, funcParent, cb). Passing a lazy
+        // module activates bunny's delayed patching: the patch applies when
+        // the module loads (ChatInputActions mounts with the first chat).
+        // On this Discord, memo.type is a forwardRef object — patch its
+        // render, which spitroast's after cb receives the rendered tree of.
+        const lazyMemo = (globalThis as any).bunny.metro.findByFilePathLazy(
+            "modules/chat_input/native/action_buttons/ChatInputActions.tsx", true);
+        chatInputUnpatch = patcher.after("render", lazyMemo, (_args: any[], ret: any) => insertLockButton(ret)) as unknown as () => void;
+        log.info("Lock button patch armed (delayed until chat input loads)");
+    } catch (e) {
+        log.error("Lock button patch failed", e);
+    }
 }
 
 function LockButton() {
@@ -1310,7 +1308,7 @@ function start() {
     try {
         // spitroast callbacks: instead(args, orig) -> return value; orig is
         // pre-bound, called as orig(...args).
-        sendUnpatch = patcher.instead("e2ee-send", MessageActions, "sendMessage", (args: any[], orig: (...a: any[]) => any) => {
+        sendUnpatch = patcher.instead("sendMessage", MessageActions, (args: any[], orig: (...a: any[]) => any) => {
             const [channelId, data] = args;
             if (!data || typeof data.content !== "string"
                 || isE2EEMessage(data.content)
@@ -1324,7 +1322,7 @@ function start() {
                 });
         }) as unknown as () => void;
 
-        editUnpatch = patcher.instead("e2ee-edit", MessageActions, "editMessage", (args: any[], orig: (...a: any[]) => any) => {
+        editUnpatch = patcher.instead("editMessage", MessageActions, (args: any[], orig: (...a: any[]) => any) => {
             const [channelId] = args;
             const block = onEdit(channelId, args);
             if (block === false) return undefined;
@@ -1357,7 +1355,6 @@ function stop() {
     try { editUnpatch?.(); } catch { }
     try { fluxUnsub?.(); } catch { }
     try { chatInputUnpatch?.(); } catch { }
-    if (chatInputRetry) { clearInterval(chatInputRetry); chatInputRetry = null; }
     chatInputUnpatch = null;
     sendUnpatch = null;
     editUnpatch = null;
