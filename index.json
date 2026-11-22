@@ -12,7 +12,7 @@
       },
       "versions": {
         "1.0.0": {
-          "url": "https://raw.githubusercontent.com/komod4747/revenge-e2ee/main/pool/com.tobi437a.e2ee@1.0.0.zip",
+          "url": "https://raw.githubusercontent.com/Agasiasssi/revenge-e2ee/main/pool/com.tobi437a.e2ee@1.0.0.zip",
           "sha256": "aef4e493304d03ba9b12a1d86c95be73135cf01f313151f06b8428a117fd9bc6",
           "size": 36843,
           "dependencies": {

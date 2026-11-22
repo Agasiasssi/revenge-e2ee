@@ -9,7 +9,7 @@ Signal-style **Double Ratchet** (X25519 + HKDF-SHA256 + AES-256-GCM), protocol *
 1. Open **Revenge → Repositories → Add repository** and enter:
 
    ```
-   https://raw.githubusercontent.com/komod4747/revenge-e2ee/main/index.json
+   https://raw.githubusercontent.com/Agasiasssi/revenge-e2ee/main/index.json
    ```
 
 2. Open the plugin list, install **E2EE**, enable it, restart Discord.
@@ -52,7 +52,7 @@ The artifact is `plugins/com.tobi437a.e2ee/build/js/index.js`; package it as a Z
 `index.json` + `pool/` on this branch form a Revenge plugin repository. The install URL above is that index. After rebuilding, bump `version` in `manifest.json`, repackage the zip into `pool/<id>@<version>.zip`, and regenerate the index:
 
 ```sh
-bunx revenge-plugin generate-index --dist pool --base-url https://raw.githubusercontent.com/komod4747/revenge-e2ee/main/pool --out index.json
+bunx revenge-plugin generate-index --dist pool --base-url https://raw.githubusercontent.com/Agasiasssi/revenge-e2ee/main/pool --out index.json
 ```
 
 ## License
