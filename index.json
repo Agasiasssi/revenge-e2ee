@@ -1,0 +1,30 @@
+{
+  "format": 1,
+  "name": "E2EE plugin repository",
+  "description": "End-to-end encryption for Discord DMs (Revenge port of tobi437a/vencord-E2EE)",
+  "plugins": {
+    "com.tobi437a.e2ee": {
+      "name": "E2EE",
+      "description": "End-to-end encryption for DMs using a Signal-style Double Ratchet (X25519 + HKDF + AES-GCM). Protocol v2, wire-compatible with the Vencord desktop plugin.",
+      "author": "Tobi <1496025810870472744> (https://github.com/tobi437a)",
+      "channels": {
+        "latest": "1.0.0"
+      },
+      "versions": {
+        "1.0.0": {
+          "url": "https://raw.githubusercontent.com/komod4747/revenge-e2ee/main/pool/com.tobi437a.e2ee@1.0.0.zip",
+          "sha256": "aef4e493304d03ba9b12a1d86c95be73135cf01f313151f06b8428a117fd9bc6",
+          "size": 36843,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      }
+    }
+  }
+}
