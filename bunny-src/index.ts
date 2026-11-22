@@ -1290,6 +1290,7 @@ let sendUnpatch: (() => void) | null = null;
 let editUnpatch: (() => void) | null = null;
 
 function start() {
+    (globalThis as any).__e2eeStarted = true;
     if (!hasNativeRng()) {
         log.warn(
             "No CSPRNG available in this runtime (crypto.getRandomValues missing). " +
@@ -1365,17 +1366,22 @@ function stop() {
 }
 
 /*
- * Loader contract (Plugin Browser): the bundle runs inside
- *   (bunny, definePlugin) => { <code>; return plugin?.default ?? plugin; }
- * `definePlugin` is a parameter of that scope — reachable through the closure
- * chain from this bundle (the bundler never touches bare globals). Declared
- * here so TS/bundler leave the reference alone. The Vendetta URL-install
- * loader has no definePlugin; its eval reads the instance from the bundle's
- * return value (see vd/index.js wrapper).
+ * Loader contracts:
+ *   • Plugin Browser (bunny): runs inside
+ *       (bunny, definePlugin) => { <code>; return plugin?.default ?? plugin; }
+ *     — calls start()/stop() on the returned instance.
+ *   • Vendetta URL-install: `vendetta=>{return <bundle>}` — calls
+ *       onLoad()/onUnload() and reads .settings for the settings page.
+ *     The instance below carries both contracts.
  */
 declare const definePlugin: undefined | ((p: any) => any);
 
-const instance = { start, stop, SettingsComponent };
+const instance = {
+    start, stop, SettingsComponent,
+    settings: SettingsComponent,
+    onLoad: start,
+    onUnload: stop,
+};
 (globalThis as any).plugin = instance;
 (globalThis as any).__e2eeInstance = instance;
 try {

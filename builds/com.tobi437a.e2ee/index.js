@@ -5068,6 +5068,7 @@
   var sendUnpatch = null;
   var editUnpatch = null;
   function start() {
+    globalThis.__e2eeStarted = true;
     if (!hasNativeRng()) {
       log.warn("No CSPRNG available in this runtime (crypto.getRandomValues missing). " + "Key generation falls back to a SHA-256 entropy pool — E2EE security is REDUCED. " + "Consider generating your identity on a desktop build and transferring it.");
     }
@@ -5124,7 +5125,14 @@
     stateSubscribers.clear();
     log.info("E2EE plugin stopped");
   }
-  var instance = { start, stop, SettingsComponent };
+  var instance = {
+    start,
+    stop,
+    SettingsComponent,
+    settings: SettingsComponent,
+    onLoad: start,
+    onUnload: stop
+  };
   globalThis.plugin = instance;
   globalThis.__e2eeInstance = instance;
   try {
