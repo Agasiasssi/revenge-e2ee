@@ -4,15 +4,17 @@ End-to-end encryption for Discord DMs, for [Revenge](https://github.com/revenge-
 
 Signal-style **Double Ratchet** (X25519 + HKDF-SHA256 + AES-256-GCM), protocol **v2**, **wire-compatible** with the Vencord desktop build: a phone on Revenge and a desktop on Vencord can hold an encrypted conversation.
 
-## Install
+## Install (Revenge Xposed 1.9.x)
 
-1. Open **Revenge → Repositories → Add repository** and enter:
+1. Discord → **Settings → Plugins** → **Plugin Browser** → tap the **+** in the top-right → **Add Repository...** and enter:
 
    ```
-   https://raw.githubusercontent.com/Agasiasssi/revenge-e2ee/main/index.json
+   https://raw.githubusercontent.com/Agasiasssi/revenge-e2ee/main/
    ```
 
-2. Open the plugin list, install **E2EE**, enable it, restart Discord.
+   (trailing slash matters — Revenge fetches `repo.json` relative to it)
+
+2. Install **E2EE** from the browser, enable it, restart Discord.
 3. Open a DM, tap the **lock button** in the chat input bar:
    - 🔓 off → tap to invite (sends a handshake message)
    - 🟡 waiting for the other side to accept
@@ -20,7 +22,11 @@ Signal-style **Double Ratchet** (X25519 + HKDF-SHA256 + AES-256-GCM), protocol *
    - ⚠️ the other side's identity key **changed** — compare the safety number before trusting it
    - 🔑 vault is locked — enter your password
 
+Alternative (Install from URL): paste `https://raw.githubusercontent.com/Agasiasssi/revenge-e2ee/main/vd` into the URL-install box — that loads the same plugin through Revenge's Vendetta-compatible installer.
+
 Works in **1:1 DMs only**. Both sides need the plugin (desktop: the Vencord build) at the same protocol version, or messages render as placeholders instead of text.
+
+> Note: this plugin targets the Bunny plugin system your Revenge ships today. The newer `index.json` repository format (in `index.json`/`pool/` here) is for the next-gen Revenge loader and is kept for forward compatibility.
 
 ## What it protects
 
@@ -37,15 +43,31 @@ Works in **1:1 DMs only**. Both sides need the plugin (desktop: the Vencord buil
 
 ## Build from source
 
-This repo holds the plugin as a [revenge-plugin-template](https://github.com/revenge-mod/revenge-plugin-template) plugin folder. To rebuild:
+- `bunny-src/` — the plugin as installed by Revenge 1.9.x (Bunny loader). Bundle it with [bun](https://bun.sh):
 
-```sh
-git clone https://github.com/revenge-mod/revenge-plugin-template
-cp -r plugins/com.tobi437a.e2ee <template>/plugins/
-cd <template> && bun install && bun run build com.tobi437a.e2ee
+  ```sh
+  bun install
+  bun build bunny-src/index.ts --format=iife --target=browser --outfile=builds/com.tobi437a.e2ee/index.js
+  ```
+
+- `plugins/com.tobi437a.e2ee/` — the Revenge-next (Vencord-style) variant; drop it into [revenge-plugin-template](https://github.com/revenge-mod/revenge-plugin-template) and `bun run build com.tobi437a.e2ee`.
+
+Both share the same crypto/session core (`bunny-src/{crypto,session,vault,serial,compress}.ts`).
+
+## Distribution layout
+
+```
+repo.json                              # Bunny plugin repository (Plugin Browser)
+builds/com.tobi437a.e2ee/              # Bunny artifact: manifest.json + index.js
+vd/                                    # Vendetta URL-install: manifest.json + index.js
+index.json + pool/                     # Revenge-next repository (forward-compatible)
 ```
 
-The artifact is `plugins/com.tobi437a.e2ee/build/js/index.js`; package it as a ZIP next to `manifest.json` (that is what `pool/` holds here).
+To release an update: bump `version` in both manifests, rebuild, and regenerate `index.json`:
+
+```sh
+bunx revenge-plugin generate-index --dist pool --base-url https://raw.githubusercontent.com/Agasiasssi/revenge-e2ee/main/pool --out index.json
+```
 
 ## Distribution
 

@@ -1,0 +1,11 @@
+{
+  "name": "revenge-e2ee",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@noble/ciphers": "^2.0.1",
+    "@noble/curves": "^2.0.1",
+    "@noble/hashes": "^2.0.1",
+    "fflate": "^0.8.2"
+  }
+}

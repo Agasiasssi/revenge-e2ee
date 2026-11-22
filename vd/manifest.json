@@ -1,0 +1,12 @@
+{
+	"name": "E2EE",
+	"description": "End-to-end encryption for DMs using a Signal-style Double Ratchet (X25519 + HKDF + AES-GCM). Wire-compatible with the Vencord desktop plugin.",
+	"authors": [
+		{
+			"name": "Tobi",
+			"id": "1496025810870472744"
+		}
+	],
+	"main": "index.js",
+	"hash": "2c60c5e229a30035"
+}
