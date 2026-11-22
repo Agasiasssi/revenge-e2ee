@@ -1,0 +1,19 @@
+{
+	"format": 1,
+	"id": "com.tobi437a.e2ee",
+	"name": "E2EE",
+	"description": "End-to-end encryption for DMs using a Signal-style Double Ratchet (X25519 + HKDF + AES-GCM). Protocol v2, wire-compatible with the Vencord desktop plugin.",
+	"author": "Tobi <1496025810870472744> (https://github.com/tobi437a)",
+	"version": "1.0.0",
+	"dependencies": {
+		"revenge.api": {
+			"version": ">=1 <2"
+		},
+		"discord": {
+			"version": "*"
+		}
+	},
+	"dist": {
+		"script": "index.js"
+	}
+}
